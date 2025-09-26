@@ -1,0 +1,3 @@
+# Placeholder for audio file
+# In a real application, you would place an actual MP3 file here
+# For the proof of concept, the application will handle the absence gracefully
