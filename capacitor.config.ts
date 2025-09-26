@@ -22,9 +22,6 @@ const config: CapacitorConfig = {
   ios: {
     contentInset: 'automatic',
   },
-  android: {
-    minVersion: 21,
-  },
 }
 
 export default config
