@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC Demo - Resonance</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .container {
+            background: #2a2a2a;
+            padding: 30px;
+            border-radius: 10px;
+        }
+        h1 {
+            margin-bottom: 10px;
+        }
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #666;
+        }
+        .indicator.connected {
+            background: #4ade80;
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        #log {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+        }
+        .log-info { color: #60a5fa; }
+        .log-success { color: #4ade80; }
+        .log-error { color: #f87171; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WebRTC Connection Demo</h1>
+        <p>Proof of concept for device-to-device communication</p>
+
+        <div class="status">
+            <div class="indicator" id="statusIndicator"></div>
+            <span id="statusText">Disconnected</span>
+        </div>
+
+        <button id="connectBtn" onclick="toggleConnection()">Create Connection</button>
+
+        <div id="log"></div>
+    </div>
+
+    <script>
+        let peerConnection = null;
+        let dataChannel = null;
+        let isConnected = false;
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function updateStatus(connected) {
+            isConnected = connected;
+            const indicator = document.getElementById('statusIndicator');
+            const statusText = document.getElementById('statusText');
+            const btn = document.getElementById('connectBtn');
+
+            if (connected) {
+                indicator.classList.add('connected');
+                statusText.textContent = 'Connected';
+                btn.textContent = 'Disconnect';
+            } else {
+                indicator.classList.remove('connected');
+                statusText.textContent = 'Disconnected';
+                btn.textContent = 'Create Connection';
+            }
+        }
+
+        function createPeerConnection() {
+            const config = {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
+            };
+
+            peerConnection = new RTCPeerConnection(config);
+            log('Peer connection created', 'info');
+
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    log(`ICE candidate generated: ${event.candidate.candidate.slice(0, 50)}...`, 'info');
+                }
+            };
+
+            peerConnection.onconnectionstatechange = () => {
+                log(`Connection state: ${peerConnection.connectionState}`, 'info');
+                if (peerConnection.connectionState === 'connected') {
+                    updateStatus(true);
+                    log('Successfully connected!', 'success');
+                } else if (peerConnection.connectionState === 'disconnected' ||
+                           peerConnection.connectionState === 'failed') {
+                    updateStatus(false);
+                }
+            };
+
+            // Create data channel
+            dataChannel = peerConnection.createDataChannel('sync');
+
+            dataChannel.onopen = () => {
+                log('Data channel opened', 'success');
+                // Send a test message
+                const testMessage = {
+                    type: 'sync',
+                    timestamp: Date.now(),
+                    data: 'Hello from Resonance!'
+                };
+                dataChannel.send(JSON.stringify(testMessage));
+                log(`Sent test message: ${JSON.stringify(testMessage)}`, 'info');
+            };
+
+            dataChannel.onmessage = (event) => {
+                log(`Received message: ${event.data}`, 'success');
+            };
+
+            dataChannel.onerror = (error) => {
+                log(`Data channel error: ${error}`, 'error');
+            };
+
+            return peerConnection;
+        }
+
+        async function toggleConnection() {
+            if (isConnected) {
+                // Disconnect
+                if (dataChannel) {
+                    dataChannel.close();
+                    log('Data channel closed', 'info');
+                }
+                if (peerConnection) {
+                    peerConnection.close();
+                    log('Peer connection closed', 'info');
+                }
+                peerConnection = null;
+                dataChannel = null;
+                updateStatus(false);
+            } else {
+                // Connect
+                try {
+                    createPeerConnection();
+
+                    // Create an offer
+                    const offer = await peerConnection.createOffer();
+                    await peerConnection.setLocalDescription(offer);
+                    log('Offer created and set as local description', 'success');
+                    log('In a real scenario, you would exchange this offer with another peer', 'info');
+
+                    // Simulate self-connection for demo
+                    setTimeout(() => {
+                        updateStatus(true);
+                        log('Demo connection established (simulated)', 'success');
+                    }, 1000);
+
+                } catch (error) {
+                    log(`Error: ${error.message}`, 'error');
+                }
+            }
+        }
+
+        log('WebRTC demo ready', 'info');
+        log('Click "Create Connection" to test peer connection setup', 'info');
+    </script>
+</body>
+</html>
